@@ -4723,6 +4723,7 @@ int sde_encoder_vid_wait_for_active(
 		mode = phys->cached_mode;
 		min_ln_cnt = (mode.vtotal - mode.vsync_start) +
 			(mode.vsync_end - mode.vsync_start);
+#ifdef CONFIG_MACH_XIAOMI_GARNET
 		if (display && display->panel &&
 			(mi_get_panel_id_by_dsi_panel(display->panel) == N16_PANEL_PA
 			||mi_get_panel_id_by_dsi_panel(display->panel) == N16_PANEL_PB)) {
@@ -4732,6 +4733,9 @@ int sde_encoder_vid_wait_for_active(
 		} else {
 			active_mark_region = mode.vdisplay + min_ln_cnt - mode.vdisplay / 4;
 		}
+#else
+		active_mark_region = mode.vdisplay + min_ln_cnt - mode.vdisplay / 4;
+#endif
 		while (retry) {
 			ln_cnt = phys->ops.get_line_count(phys);
 			if ((ln_cnt > min_ln_cnt) && (ln_cnt < active_mark_region))
@@ -4752,7 +4756,6 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool config_changed)
 	struct dsi_display *dsi_display = NULL;
 	struct dsi_display_mode adj_mode;
 	struct drm_bridge *bridge;
-	unsigned int rc = 0;
 
 	if (!drm_enc) {
 		SDE_ERROR("invalid encoder\n");
@@ -4785,6 +4788,7 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool config_changed)
 		SDE_EVT32(DRMID(drm_enc), i, SDE_EVTLOG_FUNC_CASE1);
 	}
 
+#ifdef CONFIG_MACH_XIAOMI_MARBLE
 	if (dsi_display && dsi_display->panel
 		&& sde_enc->disp_info.intf_type == DRM_MODE_CONNECTOR_DSI
 		&& adj_mode.dsi_mode_flags & DSI_MODE_FLAG_VRR) {
@@ -4797,7 +4801,9 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool config_changed)
 			mutex_unlock(&dsi_display->panel->panel_lock);
 		}
 	}
+#endif
 
+#ifdef CONFIG_MACH_XIAOMI_GARNET
 	if (dsi_display && dsi_display->panel && sde_enc->disp_info.intf_type == DRM_MODE_CONNECTOR_DSI
 		&& (mi_get_panel_id_by_dsi_panel(dsi_display->panel) == N16_PANEL_PA
 		||mi_get_panel_id_by_dsi_panel(dsi_display->panel) == N16_PANEL_PB)
@@ -4805,8 +4811,7 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool config_changed)
 		mutex_lock(&dsi_display->panel->panel_lock);
 		if (mi_get_panel_id_by_dsi_panel(dsi_display->panel) == N16_PANEL_PB &&
 			dsi_display->panel->mi_cfg.aod_to_normal_pending) {
-			rc = mi_dsi_panel_aod_to_normal_optimize_locked(dsi_display->panel, true);
-			if (rc != -EAGAIN)
+			if (mi_dsi_panel_aod_to_normal_optimize_locked(dsi_display->panel, true) != -EAGAIN)
 				dsi_display->panel->mi_cfg.aod_to_normal_pending = false;
 		}
 		sde_encoder_vid_wait_for_active(drm_enc);
@@ -4821,7 +4826,9 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool config_changed)
 			mi_disp_lhbm_fod_allow_tx_lhbm(dsi_display, true);
 		}
 	}
+#endif
 
+#ifdef CONFIG_MACH_XIAOMI_YUDI
 	if (dsi_display && dsi_display->panel && (mi_get_panel_id(dsi_display->panel->mi_cfg.mi_panel_id) == M80_PANEL_PA) &&
 	    (adj_mode.dsi_mode_flags & DSI_MODE_FLAG_VRR)) {
 		mutex_lock(&dsi_display->panel->panel_lock);
@@ -4831,14 +4838,14 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool config_changed)
 	if (dsi_display && dsi_display->panel && (mi_get_panel_id(dsi_display->panel->mi_cfg.mi_panel_id) == M80_PANEL_PA) &&
 	    (adj_mode.dsi_mode_flags & DSI_MODE_FLAG_VRR)) {
 		if (dsi_display->panel->mi_cfg.last_fps == 60 && adj_mode.timing.refresh_rate != 120) {
-		    rc = dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_SET_DISP_PEN_CLEAR);
-			if (rc) {
+			if (dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_SET_DISP_PEN_CLEAR)) {
 				pr_err("Failed to send DSI_CMD_SET_DISP_PEN_CLEAR command\n");
 			}
 			sde_encoder_wait_for_event(drm_enc,MSM_ENC_VBLANK);
 			sde_encoder_vid_wait_for_active(drm_enc);
 		}
 	}
+#endif
 
 	/* All phys encs are ready to go, trigger the kickoff */
 	_sde_encoder_kickoff_phys(sde_enc, config_changed);
@@ -4855,19 +4862,22 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool config_changed)
 		_sde_encoder_update_rsc_client(drm_enc, true);
 
 
-
+#ifdef CONFIG_MACH_XIAOMI_YUDI
 	if (dsi_display && dsi_display->panel && (mi_get_panel_id(dsi_display->panel->mi_cfg.mi_panel_id) == M80_PANEL_PA) &&
 	    (adj_mode.dsi_mode_flags & DSI_MODE_FLAG_VRR)) {
 		mi_dsi_panel_match_fps_pen_setting(dsi_display->panel, &adj_mode);
 		mutex_unlock(&dsi_display->panel->panel_lock);
 	}
+#endif
 
+#ifdef CONFIG_MACH_XIAOMI_MARBLE
 	if (dsi_display && dsi_display->panel
 		&& sde_enc->disp_info.intf_type == DRM_MODE_CONNECTOR_DSI
 		&& mi_get_panel_id_by_dsi_panel(dsi_display->panel) == M16T_PANEL_PA
 		&& adj_mode.dsi_mode_flags & DSI_MODE_FLAG_VRR) {
 		dsi_panel_gamma_switch(dsi_display->panel);
 	}
+#endif
 
 	SDE_ATRACE_END("encoder_kickoff");
 }

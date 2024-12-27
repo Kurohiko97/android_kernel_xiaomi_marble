@@ -330,9 +330,11 @@ int dsi_display_set_backlight(struct drm_connector *connector,
 
 	DSI_DEBUG("dimming enable :%d, bl_temp = %u\n", panel->bl_config.dimming_enabled, (u32)bl_temp);
 
+#ifdef CONFIG_MACH_XIAOMI_MONDRIAN
 	/* for AP set EM pulse */
 	if (mi_get_panel_id_by_dsi_panel(dsi_display->panel) == M11A_PANEL_PA)
 		mi_sde_connector_set_em_pulse(connector, (u32)bl_temp);
+#endif
 
 	rc = dsi_panel_set_backlight(panel, (u32)bl_temp);
 	if (rc)
@@ -745,7 +747,6 @@ static void dsi_display_set_cmd_tx_ctrl_flags(struct dsi_display *display,
 	struct mipi_dsi_msg *msg = &cmd->msg;
 	u32 flags = 0;
 	int i = 0;
-	u8 *buf = NULL;
 
 	m_ctrl = &display->ctrl[display->clk_master_idx];
 	display_for_each_ctrl(i, display) {
@@ -816,14 +817,18 @@ static void dsi_display_set_cmd_tx_ctrl_flags(struct dsi_display *display,
 		if (msg->flags & MIPI_DSI_MSG_ASYNC_OVERRIDE)
 				flags |= DSI_CTRL_CMD_ASYNC_WAIT;
 
+#ifdef CONFIG_MACH_XIAOMI_GARNET
 		/* video panel update 51 use async wait*/
 		if (mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == N16_PANEL_PB ||
 			mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == N16_PANEL_PA) {
+			u8 *buf = NULL;
+
 			buf = (u8 *)msg->tx_buf;
 			if ((buf && buf[0] == MIPI_DCS_SET_DISPLAY_BRIGHTNESS)) {
 				flags |= DSI_CTRL_CMD_ASYNC_WAIT;
 			}
 		}
+#endif
 	}
 
 	cmd->ctrl_flags |= flags;
@@ -1477,8 +1482,10 @@ int dsi_display_set_power(struct drm_connector *connector,
 		if ((display->panel->power_mode == SDE_MODE_DPMS_LP1) ||
 			(display->panel->power_mode == SDE_MODE_DPMS_LP2)) {
 			rc = dsi_panel_set_nolp(display->panel);
+#ifdef CONFIG_MACH_XIAOMI_GARNET
 			if (mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == N16_PANEL_PB)
 				mi_dsi_panel_set_flat_mode(display->panel, false);
+#endif
 		}
 		break;
 	case SDE_MODE_DPMS_OFF:
@@ -5163,6 +5170,7 @@ static int dsi_display_get_dfps_timing(struct dsi_display *display,
 	}
 	/* TODO: Remove this direct reference to the dsi_ctrl */
 	timing = &per_ctrl_mode.timing;
+#ifdef CONFIG_MACH_XIAOMI_YUDI
 	if(mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == M80_PANEL_PA){
 		if (timing->refresh_rate == 90) {
 			adj_mode->timing.v_front_porch = 26;
@@ -5184,6 +5192,7 @@ static int dsi_display_get_dfps_timing(struct dsi_display *display,
 			adj_mode->timing.h_front_porch = 130;
 		}
 	}else{ 
+#endif
 		switch (dfps_caps.type) {
 		case DSI_DFPS_IMMEDIATE_VFP:
 			rc = dsi_display_dfps_calc_front_porch(
@@ -5217,7 +5226,9 @@ static int dsi_display_get_dfps_timing(struct dsi_display *display,
 			DSI_ERR("Unsupported DFPS mode %d\n", dfps_caps.type);
 			rc = -ENOTSUPP;
 		}
+#ifdef CONFIG_MACH_XIAOMI_YUDI
 	}
+#endif
 	return rc;
 }
 
@@ -7445,10 +7456,16 @@ int dsi_display_get_modes(struct dsi_display *display,
 				sub_mode->priv_info->qsync_min_fps = sub_mode->timing.qsync_min_fps;
 			}
 
-			if (mi_get_panel_id_by_dsi_panel(display->panel) == M16T_PANEL_PA ||
-				mi_get_panel_id_by_dsi_panel(display->panel) == M16T_PANEL_PB ||
-				mi_get_panel_id_by_dsi_panel(display->panel) == N16_PANEL_PA ||
-				mi_get_panel_id_by_dsi_panel(display->panel) == N16_PANEL_PB) {
+			if (false
+#ifdef CONFIG_MACH_XIAOMI_MARBLE
+			    || mi_get_panel_id_by_dsi_panel(display->panel) == M16T_PANEL_PA
+			    || mi_get_panel_id_by_dsi_panel(display->panel) == M16T_PANEL_PB
+#endif
+#ifdef CONFIG_MACH_XIAOMI_GARNET
+			    || mi_get_panel_id_by_dsi_panel(display->panel) == N16_PANEL_PA
+			    || mi_get_panel_id_by_dsi_panel(display->panel) == N16_PANEL_PB
+#endif
+			    ) {
 				if (sub_mode->timing.refresh_rate == 30) {
 					fps_type->type= DSI_DFPS_IMMEDIATE_HFP;
 				} else {
@@ -7458,6 +7475,7 @@ int dsi_display_get_modes(struct dsi_display *display,
 
 			dsi_display_get_dfps_timing(display, sub_mode,
 					curr_refresh_rate);
+#ifdef CONFIG_MACH_XIAOMI_MARBLE
 			/*Override VFP  in M16T_PANEL_PB*/
 			if(mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == M16T_PANEL_PB) {
 				if(sub_mode->timing.refresh_rate == 60) {
@@ -7468,6 +7486,7 @@ int dsi_display_get_modes(struct dsi_display *display,
 					sub_mode->timing.v_front_porch = 16;
 				}
 			}
+#endif
 			sub_mode->panel_mode_caps = DSI_OP_VIDEO_MODE;
 		}
 		end = array_idx;
@@ -8736,10 +8755,12 @@ wait_failure:
 	if (!ret)
 		rc = dsi_display_set_roi(display, params->rois);
 
+#ifdef CONFIG_MACH_XIAOMI_MARBLE
 	if (mi_get_panel_id_by_dsi_panel(display->panel) == M16T_PANEL_PA ||
 		mi_get_panel_id_by_dsi_panel(display->panel) == M16T_PANEL_PB) {
 		dsi_panel_pre_aod_inVideo(display->panel);
 	}
+#endif
 
 	return rc;
 }
@@ -8859,21 +8880,35 @@ int dsi_display_enable(struct dsi_display *display)
 		DSI_INFO("cont splash enabled, display enable not required\n");
 		dsi_display_panel_id_notification(display);
 
+#ifdef CONFIG_MACH_XIAOMI_GARNET
 		if (mi_get_panel_id_by_dsi_panel(display->panel) == N16_PANEL_PB)
 			if (mi_dsi_display_read_panel_build_id(display) <= 0)
 				DSI_INFO("[%s] DSI display read panel build id failed\n", display->name);
+#endif
 
-		if (mi_get_panel_id_by_dsi_panel(display->panel) == L3_PANEL_PA ||
-			mi_get_panel_id_by_dsi_panel(display->panel) == L3S_PANEL_PA) {
+		if (false
+#ifdef CONFIG_MACH_XIAOMI_CUPID
+		    || mi_get_panel_id_by_dsi_panel(display->panel) == L3_PANEL_PA
+#endif
+#ifdef CONFIG_MACH_XIAOMI_MAYFLY
+		    || mi_get_panel_id_by_dsi_panel(display->panel) == L3S_PANEL_PA
+#endif
+		    ) {
 			if (!display->panel->mi_cfg.uefi_read_lhbm_success) {
 				DSI_INFO("uefi_read_lhbm_success is false, read in kernel.\n");
 				mi_dsi_panel_read_lhbm_white_param(display->panel);
 			}
 		}
 
-		if (mi_get_panel_id_by_dsi_panel(display->panel) == L1_PANEL_PA ||
-			mi_get_panel_id_by_dsi_panel(display->panel) == L18_PANEL_PA ||
-			mi_get_panel_id_by_dsi_panel(display->panel) == L18_PANEL_SA) {
+		if (false
+#ifdef CONFIG_MACH_XIAOMI_THOR
+		    || mi_get_panel_id_by_dsi_panel(display->panel) == L1_PANEL_PA
+#endif
+#ifdef CONFIG_MACH_XIAOMI_ZIZHAN
+		    || mi_get_panel_id_by_dsi_panel(display->panel) == L18_PANEL_PA
+		    || mi_get_panel_id_by_dsi_panel(display->panel) == L18_PANEL_SA
+#endif
+		    ) {
 			mi_dsi_display_manufacturer_info_init(display);
 		}
 
@@ -8944,9 +8979,11 @@ int dsi_display_enable(struct dsi_display *display)
 		SDE_ATRACE_BEGIN(trace_buf);
 		rc = dsi_panel_switch(display->panel);
 
+#ifdef CONFIG_MACH_XIAOMI_ZIYI
 		if (mi_get_panel_id_by_dsi_panel(display->panel) == L9S_PANEL_PA ||
 			mi_get_panel_id_by_dsi_panel(display->panel) == L9S_PANEL_PB)
 			sde_encoder_wait_for_event(c_conn->encoder,MSM_ENC_VBLANK);
+#endif
 
 		SDE_ATRACE_END(trace_buf);
 		if (rc)
@@ -9314,13 +9351,22 @@ int dsi_display_unprepare(struct dsi_display *display)
 	dsi_display_ctrl_isr_configure(display, false);
 
 	if (!display->poms_pending && !is_skip_op_required(display)) {
-		if (mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == L3_PANEL_PA ||
-			mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == L3S_PANEL_PA) {
+		if (false
+#ifdef CONFIG_MACH_XIAOMI_CUPID
+		    || mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == L3_PANEL_PA
+#endif
+#ifdef CONFIG_MACH_XIAOMI_MAYFLY
+		    || mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == L3S_PANEL_PA
+#endif
+		    ) {
 			usleep_range(1000, 1010);
-		} else if (mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == L12_PANEL_PA ||
+		}
+#ifdef CONFIG_MACH_XIAOMI_DITING
+		if (mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == L12_PANEL_PA ||
 			mi_get_panel_id(display->panel->mi_cfg.mi_panel_id) == L12_PANEL_PB) {
 			usleep_range(10000, 10010);
 		}
+#endif
 		rc = dsi_panel_post_unprepare(display->panel);
 		if (rc)
 			DSI_ERR("[%s] panel post-unprepare failed, rc=%d\n",
