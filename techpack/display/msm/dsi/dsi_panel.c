@@ -5130,10 +5130,14 @@ int dsi_panel_set_nolp(struct dsi_panel *panel)
 		    panel->mi_cfg.last_no_zero_bl_level < panel->mi_cfg.doze_lbm_dbv_level)
 			update_bl = panel->mi_cfg.last_no_zero_bl_level;
 #endif
-		if (panel->mi_cfg.unknown_flag) {
+#ifdef CONFIG_MACH_XIAOMI_MARBLE
+		if (mi_get_panel_id(panel->mi_cfg.mi_panel_id) == M16T_PANEL_PA &&
+		    panel->mi_cfg.unknown_flag) {
 			update_bl = panel->mi_cfg.last_bl_level;
 			DISP_INFO("set backlight to %d in nolp", update_bl);
+			panel->mi_cfg.unknown_flag = false;
 		}
+#endif
 		mi_dsi_update_51_mipi_cmd(panel, DSI_CMD_SET_NOLP, update_bl);
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_NOLP);
 		panel->power_mode = SDE_MODE_DPMS_ON;
