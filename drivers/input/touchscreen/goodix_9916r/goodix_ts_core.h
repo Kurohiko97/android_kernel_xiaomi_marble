@@ -305,7 +305,6 @@ struct goodix_module {
  * @reset_gpio: reset gpio number
  * @irq_gpio: interrupt gpio number
  * @irq_flag: irq trigger type
- * @swap_axis: whether swaw x y axis
  * @panel_max_x/y/w/p: resolution and size
  * @pannel_key_map: key map
  * @fw_name: name of the firmware image
@@ -319,7 +318,6 @@ struct goodix_ts_board_data {
 	int iovdd_gpio;
 	unsigned int  irq_flags;
 
-	unsigned int swap_axis;
 	unsigned int panel_max_x;
 	unsigned int panel_max_y;
 	unsigned int panel_max_w; /*major and minor*/
