@@ -325,7 +325,9 @@ struct goodix_ts_board_data {
 	unsigned int panel_max_w; /*major and minor*/
 	unsigned int panel_max_p; /*pressure*/
 
+#ifdef CONFIG_TOUCHSCREEN_GOODIX_BRL_9916_PEN
 	bool pen_enable;
+#endif
 	char fw_name[GOODIX_MAX_STR_LABLE_LEN];
 	char cfg_bin_name[GOODIX_MAX_STR_LABLE_LEN];
 	u32 touch_expert_array[GAME_ARRAY_LEN * GAME_ARRAY_SIZE];
@@ -397,6 +399,7 @@ struct goodix_ts_coords {
 	unsigned int x, y, w, p;
 };
 
+#ifdef CONFIG_TOUCHSCREEN_GOODIX_BRL_9916_PEN
 struct goodix_pen_coords {
 	int status; /* NONE, RELEASE, TOUCH */
 	int tool_type;  /* BTN_TOOL_RUBBER BTN_TOOL_PEN */
@@ -404,6 +407,7 @@ struct goodix_pen_coords {
 	signed char tilt_x;
 	signed char tilt_y;
 };
+#endif
 
 /* touch event data */
 struct goodix_touch_data {
@@ -420,10 +424,12 @@ struct goodix_ts_key {
 	int code;
 };
 
+#ifdef CONFIG_TOUCHSCREEN_GOODIX_BRL_9916_PEN
 struct goodix_pen_data {
 	struct goodix_pen_coords coords;
 	struct goodix_ts_key keys[GOODIX_MAX_PEN_KEY];
 };
+#endif
 
 /*
  * struct goodix_ts_event - touch event struct
@@ -437,7 +443,9 @@ struct goodix_ts_event {
 	u8 request_code; /* represent the request type */
 	u8 gesture_type;
 	struct goodix_touch_data touch_data;
+#ifdef CONFIG_TOUCHSCREEN_GOODIX_BRL_9916_PEN
 	struct goodix_pen_data pen_data;
+#endif
 };
 
 enum goodix_ic_bus_type {
@@ -526,7 +534,9 @@ struct goodix_ts_core {
 	struct goodix_ts_board_data board_data;
 	struct goodix_ts_hw_ops *hw_ops;
 	struct input_dev *input_dev;
+#ifdef CONFIG_TOUCHSCREEN_GOODIX_BRL_9916_PEN
 	struct input_dev *pen_dev;
+#endif
 	struct class *goodix_tp_class;
 	struct device *goodix_touch_dev;
 	/* TODO counld we remove this from core data? */
