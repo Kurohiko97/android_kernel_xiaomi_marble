@@ -15,6 +15,7 @@
 #include "cam_packet_util.h"
 
 #define MAX_READ_SIZE  0x7FFFF
+#define MAX_RETRY_TIMES 3
 
 /**
  * cam_eeprom_read_memory() - read map data into buffer
@@ -512,8 +513,28 @@ static int32_t cam_eeprom_parse_memory_map(
 		break;
 	case CAMERA_SENSOR_CMD_TYPE_WAIT:
 		if (generic_op_code ==
-			CAMERA_SENSOR_WAIT_OP_HW_UCND ||
-			generic_op_code ==
+			CAMERA_SENSOR_WAIT_OP_HW_UCND ) {
+			i2c_uncond_wait =
+				(struct cam_cmd_unconditional_wait *)cmd_buf;
+			cmd_length_in_bytes =
+				sizeof(struct cam_cmd_unconditional_wait);
+
+			if (*num_map < 1) {
+				CAM_ERR(CAM_EEPROM,
+					"invalid map number, num_map=%d",
+					*num_map);
+				return -EINVAL;
+			}
+			/*
+			 * Though delay is added all of them, but delay will
+			 * be applicable to only one of them as only one of
+			 * them will have valid_size set to >= 1.
+			 */
+			map[*num_map - 1].mem.delay = i2c_uncond_wait->delay;
+			map[*num_map - 1].page.delay = i2c_uncond_wait->delay;
+			map[*num_map - 1].pageen.delay = i2c_uncond_wait->delay;
+		}
+		else if(generic_op_code ==
 			CAMERA_SENSOR_WAIT_OP_SW_UCND) {
 			i2c_uncond_wait =
 				(struct cam_cmd_unconditional_wait *)cmd_buf;
@@ -532,9 +553,9 @@ static int32_t cam_eeprom_parse_memory_map(
 			 * be applicable to only one of them as only one of
 			 * them will have valid_size set to >= 1.
 			 */
-			map[*num_map - 1].mem.delay = i2c_uncond_wait->delay;
-			map[*num_map - 1].page.delay = i2c_uncond_wait->delay;
-			map[*num_map - 1].pageen.delay = i2c_uncond_wait->delay;
+			map[*num_map - 1].mem.delay = i2c_uncond_wait->delay*1000;
+			map[*num_map - 1].page.delay = i2c_uncond_wait->delay*1000;
+			map[*num_map - 1].pageen.delay = i2c_uncond_wait->delay*1000;
 		} else if (generic_op_code ==
 			CAMERA_SENSOR_WAIT_OP_COND) {
 			i2c_poll = (struct cam_cmd_conditional_wait *)cmd_buf;
@@ -1243,6 +1264,7 @@ del_req:
 static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 {
 	int32_t                         rc = 0;
+	int32_t                         i = 0;
 	struct cam_control             *ioctl_ctrl = NULL;
 	struct cam_config_dev_cmd       dev_config;
 	uintptr_t                        generic_pkt_addr;
@@ -1335,23 +1357,33 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 			}
 		}
 
-		rc = cam_eeprom_power_up(e_ctrl,
-			&soc_private->power_info);
-		if (rc) {
-			CAM_ERR(CAM_EEPROM, "failed rc %d", rc);
-			goto memdata_free;
-		}
 
-		e_ctrl->cam_eeprom_state = CAM_EEPROM_CONFIG;
-		rc = cam_eeprom_read_memory(e_ctrl, &e_ctrl->cal_data);
-		if (rc) {
-			CAM_ERR(CAM_EEPROM,
-				"read_eeprom_memory failed");
-			goto power_down;
-		}
+		/* xiaomi add eeprom read retry - begin */
+		for (i = 0; i < MAX_RETRY_TIMES; i++) {
+			rc = cam_eeprom_power_up(e_ctrl,
+				&soc_private->power_info);
+			if (rc) {
+				CAM_ERR(CAM_EEPROM, "cam_eeprom_power_up failed at times %d", i);
+				rc = cam_eeprom_power_down(e_ctrl);
+				usleep_range(10*1000, 11*1000);
+				continue;
+			}
 
-		rc = cam_eeprom_get_cal_data(e_ctrl, csl_packet);
-		rc = cam_eeprom_power_down(e_ctrl);
+			e_ctrl->cam_eeprom_state = CAM_EEPROM_CONFIG;
+			rc = cam_eeprom_read_memory(e_ctrl, &e_ctrl->cal_data);
+			if (rc) {
+				CAM_ERR(CAM_EEPROM,
+					"cam_eeprom_read_memory failed at times %d", i);
+				rc = cam_eeprom_power_down(e_ctrl);
+				usleep_range(10*1000, 11*1000);
+			} else {
+				rc = cam_eeprom_get_cal_data(e_ctrl, csl_packet);
+				rc = cam_eeprom_power_down(e_ctrl);
+				break;
+			}
+		}
+		/* xiaomi add eeprom read retry - end */
+
 		e_ctrl->cam_eeprom_state = CAM_EEPROM_ACQUIRE;
 		vfree(e_ctrl->cal_data.mapdata);
 		vfree(e_ctrl->cal_data.map);
@@ -1426,7 +1458,7 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 
 	cam_mem_put_cpu_buf(dev_config.packet_handle);
 	return rc;
-power_down:
+
 	cam_eeprom_power_down(e_ctrl);
 memdata_free:
 	vfree(e_ctrl->cal_data.mapdata);
