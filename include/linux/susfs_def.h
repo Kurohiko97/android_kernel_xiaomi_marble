@@ -54,7 +54,6 @@
  */
 // thread_info->flags is unsigned long :D
 #define TIF_NON_ROOT_USER_APP_PROC 33
-#define TIF_PROC_SU_NOT_ALLOWED 34
 
 #define AS_FLAGS_SUS_PATH 24
 #define AS_FLAGS_SUS_MOUNT 25
@@ -86,14 +85,6 @@ static inline bool susfs_is_current_non_root_user_app_proc(void) {
 
 static inline void susfs_set_current_non_root_user_app_proc(void) {
 	set_ti_thread_flag(&current->thread_info, TIF_NON_ROOT_USER_APP_PROC);
-}
-
-static inline bool susfs_is_current_proc_su_not_allowed(void) {
-	return test_ti_thread_flag(&current->thread_info, TIF_PROC_SU_NOT_ALLOWED);
-}
-
-static inline void susfs_set_current_proc_su_not_allowed(void) {
-	set_ti_thread_flag(&current->thread_info, TIF_PROC_SU_NOT_ALLOWED);
 }
 
 static inline bool susfs_starts_with(const char *str, const char *prefix) {
