@@ -19,6 +19,8 @@
 #include "kernel_compat.h"
 
 
+char current_manager_key_sha256[SHA256_DIGEST_SIZE * 2 + 1];
+
 struct sdesc {
 	struct shash_desc shash;
 	char ctx[];
@@ -35,14 +37,11 @@ static struct apk_sign_key apk_sign_keys[] = {
 };
 
 #ifdef CONFIG_KSU_CUSTOM_SIGN_KEY
-#define KEY_LENGTH 64
-
 static unsigned int custom_key_size = 0;
-static char custom_key_sha256[KEY_LENGTH + 1];
+static char custom_key_sha256[SHA256_DIGEST_SIZE * 2 + 1];
 static struct apk_sign_key block_apk_sign_keys[] = {
 	{0x35c, "947ae944f3de4ed4c21a7e4f7953ecf351bfa2b36239da37a34111ad29993eef"},  // SukiSU-Ultra
 };
-
 
 static int custom_key_size_set(const char *val, const struct kernel_param *kp)
 {
@@ -156,6 +155,8 @@ static bool check_block(struct file *fp, u32 *size4, loff_t *pos, u32 *offset)
 		pr_info("sha256: %s, expected: %s\n", hash_str,
 			sign_key.sha256);
 		if (strcmp(sign_key.sha256, hash_str) == 0) {
+			strncpy(current_manager_key_sha256, hash_str, SHA256_DIGEST_SIZE * 2);
+			current_manager_key_sha256[SHA256_DIGEST_SIZE * 2] = '\0';
 			return true;
 		}
 	}
@@ -174,6 +175,8 @@ static bool check_block(struct file *fp, u32 *size4, loff_t *pos, u32 *offset)
 	if (*size4 == custom_key_size &&
 	    strcmp(hash_str, custom_key_sha256) == 0) {
 		pr_info("Custom sign key is matched\n");
+		strncpy(current_manager_key_sha256, custom_key_sha256, SHA256_DIGEST_SIZE * 2);
+		current_manager_key_sha256[SHA256_DIGEST_SIZE * 2] = '\0';
 		return true;
 	}
 #endif
@@ -375,5 +378,10 @@ module_param_cb(ksu_debug_manager_uid, &expected_size_ops,
 
 bool ksu_is_manager_apk(char *path)
 {
-	return check_v2_signature(path);
+	bool r = check_v2_signature(path);
+
+	if (!r)
+		memset(current_manager_key_sha256, 0, sizeof(current_manager_key_sha256));
+
+	return r;
 }

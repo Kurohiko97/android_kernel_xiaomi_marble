@@ -21,6 +21,11 @@
 #include <linux/uidgid.h>
 #include <linux/version.h>
 #include <linux/mount.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+#include <crypto/sha2.h>
+#else
+#include <crypto/sha.h>
+#endif
 
 #include <linux/fs.h>
 #include <linux/namei.h>
@@ -121,6 +126,8 @@ extern int ksu_handle_sepolicy(unsigned long arg3, void __user *arg4);
 bool ksu_su_compat_enabled = true;
 extern void ksu_sucompat_init();
 extern void ksu_sucompat_exit();
+
+extern char current_manager_key_sha256[SHA256_DIGEST_SIZE * 2 + 1];
 
 static inline bool is_allow_su()
 {
@@ -369,6 +376,10 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 	// Both root manager and root processes should be allowed to get version
 	if (arg2 == CMD_GET_VERSION) {
 		u32 version = KERNEL_SU_VERSION;
+		if (strcmp(current_manager_key_sha256, "79e590113c4c4c0c222978e413a5faa801666957b1212a328e46c00c69821bf7") == 0) {
+			// https://github.com/KernelSU-Next/KernelSU-Next/commit/892a62afdf0b3524221f4aefc39c0f840fb240d5
+			version = 12797;
+		}
 		if (copy_to_user(arg3, &version, sizeof(version))) {
 			pr_err("prctl reply error, cmd: %lu\n", arg2);
 		}
